@@ -41,12 +41,12 @@ export async function executeOrder(
       status: "dry-run",
       timestamp: new Date().toISOString(),
     };
-    logger.trade("DRY-RUN order", result);
+    logger.trade("DRY-RUN order", result as unknown as Record<string, unknown>);
     return result;
   }
   try {
     const result = await submitViaCanon(bet, market);
-    logger.trade("ORDER submitted", result);
+    logger.trade("ORDER submitted", result as unknown as Record<string, unknown>);
     return result;
   } catch (err: any) {
     const result: OrderResult = {
@@ -59,7 +59,7 @@ export async function executeOrder(
       errorMessage: err.message,
       timestamp: new Date().toISOString(),
     };
-    logger.error("Order failed", result);
+    logger.error("Order failed", result as unknown as Record<string, unknown>);
     return result;
   }
 }

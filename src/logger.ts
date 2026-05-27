@@ -11,8 +11,7 @@ export function setLogPath(p: string): void {
 }
 
 function write(entry: TradeLogEntry): void {
-  const line = JSON.stringify(entry) + "
-";
+  const line = JSON.stringify(entry) + "\n";
   const ts = entry.timestamp.slice(11, 19);
   const lvl = entry.level.toUpperCase().padEnd(5);
   console.log("[" + ts + "] " + lvl + " " + entry.message);

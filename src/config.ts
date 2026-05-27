@@ -46,5 +46,11 @@ export function loadConfig(dryRunOverride?: boolean): Config {
     pollIntervalMs: isNaN(pollIntervalMs) ? 30000 : pollIntervalMs,
     dryRun,
     logPath: process.env["LOG_PATH"] ?? "./logs/trades.jsonl",
+    startingBankroll: isNaN(bankroll) ? 50 : bankroll,
+    pollIntervalSeconds: isNaN(pollIntervalMs) ? 30 : pollIntervalMs / 1000,
+    canonCliPath: process.env["CANON_CLI_PATH"] ?? "canon",
+    walletPrivateKey: process.env["WALLET_PRIVATE_KEY"] ?? "",
+    marketType: process.env["MARKET_TYPE"] ?? "mock",
   };
 }
+export const config = loadConfig();

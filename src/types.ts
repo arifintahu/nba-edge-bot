@@ -104,6 +104,18 @@ export interface RiskState {
   haltReason?: string;
 }
 
+
+export interface TradeSignal {
+  gameId: string;
+  marketId: string;
+  recommendedSide: "home" | "away";
+  recommendedStake: number;
+  modelHomeProb: number;
+  modelAwayProb: number;
+  homeMarketProb: number;
+  awayMarketProb: number;
+  edgeMagnitude: number;
+}
 export interface Config {
   ballDontLieApiKey: string;
   polymarketApiKey: string;
@@ -116,4 +128,9 @@ export interface Config {
   pollIntervalMs: number;
   dryRun: boolean;
   logPath: string;
+  startingBankroll: number;
+  pollIntervalSeconds: number;
+  canonCliPath: string;
+  walletPrivateKey: string;
+  marketType: string;
 }

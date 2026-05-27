@@ -33,11 +33,8 @@ export function appendResult(resultsPath: string, entry: ResultEntry): void {
       "",
       "| Date | Game | Side | Entry | Exit | Amount | PnL | Notes |",
       "|------|------|------|-------|------|--------|-----|-------|",
-    ].join("
-");
-    fs.writeFileSync(resultsPath, header + "
-");
+    ].join("\n");
+    fs.writeFileSync(resultsPath, header + "\n");
   }
-  fs.appendFileSync(resultsPath, line + "
-");
+  fs.appendFileSync(resultsPath, line + "\n");
 }
