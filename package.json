@@ -1,0 +1,47 @@
+{
+  "name": "nba-edge-bot",
+  "version": "0.1.0",
+  "description": "NBA playoffs win-probability edge bot for DEGA hackathon — fetches live game state, computes win prob, detects market edges, and places orders via Canon CLI.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "ts-node src/index.ts",
+    "start:dry": "ts-node src/index.ts --dry-run",
+    "dev": "ts-node src/index.ts --dry-run",
+    "test": "jest --forceExit",
+    "test:watch": "jest --watch"
+  },
+  "dependencies": {
+    "axios": "^1.6.8",
+    "commander": "^12.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.24",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "typescript": "^5.4.2"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/tests/**/*.test.ts"
+    ],
+    "moduleFileExtensions": [
+      "ts",
+      "js",
+      "json"
+    ]
+  },
+  "keywords": [
+    "nba",
+    "prediction-market",
+    "dega",
+    "canon",
+    "polymarket",
+    "hackathon"
+  ],
+  "author": "Miftahul Arifin",
+  "license": "MIT"
+}
