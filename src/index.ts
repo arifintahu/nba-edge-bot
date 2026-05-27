@@ -1,13 +1,16 @@
 import { Command } from "commander";
 import { loadConfig } from "./config";
 import { setLogPath, logger } from "./logger";
-import { fetchLiveGames } from "./data/nbaFetcher";
-import { fetchMarketPrice } from "./market/marketFetcher";
+import { fetchLiveGames, fetchLiveGamesESPN } from "./data/nbaFetcher";
+import { fetchMarketPriceByTeams } from "./market/marketFetcher";
 import { computeWinProbability } from "./model/winProbability";
 import { detectEdge } from "./trading/edgeDetector";
 import { kellySize, checkRiskLimits } from "./trading/riskEngine";
 import { executeOrder } from "./trading/executor";
+import { PositionTracker } from "./trading/positionTracker";
+import { appendResult } from "./trading/resultsLogger";
 import type { RiskState } from "./types";
+import * as path from "path";
 
 const program = new Command();
 program.option("--dry-run", "log intended trades without sending orders");
@@ -25,6 +28,11 @@ const risk: RiskState = {
   isHalted: false,
 };
 
+const tracker = new PositionTracker();
+const positionsFile = path.join(process.cwd(), "logs", "positions.json");
+const resultsFile = path.join(process.cwd(), "RESULTS.md");
+tracker.loadFromFile(positionsFile);
+
 async function tick(): Promise<void> {
   const halt = checkRiskLimits(risk, config.stopLossFraction, config.maxOpenPositions);
   if (halt) {
@@ -37,17 +45,26 @@ async function tick(): Promise<void> {
   try {
     games = await fetchLiveGames(config.ballDontLieApiKey);
   } catch (err: any) {
-    logger.error("NBA fetch failed: " + err.message);
-    return;
+    logger.warn("balldontlie failed, trying ESPN: " + err.message);
+    try {
+      games = await fetchLiveGamesESPN();
+    } catch (err2: any) {
+      logger.error("ESPN fetch also failed: " + err2.message);
+      return;
+    }
   }
 
   const liveGames = games.filter((g) => g.status === "live");
   logger.info("Live games: " + liveGames.length);
 
+  // sync open positions from tracker
+  risk.openPositions = tracker.getOpenCount();
+  risk.totalExposed = tracker.getTotalExposed();
+
   for (const game of liveGames) {
     const winProb = computeWinProbability(game);
 
-    const market = await fetchMarketPrice(game.gameId, config.polymarketApiKey);
+    const market = await fetchMarketPriceByTeams(game.gameId, game.homeTeam, game.awayTeam, config.polymarketApiKey);
     if (!market) {
       logger.warn("No market for game " + game.gameId);
       continue;
@@ -72,10 +89,22 @@ async function tick(): Promise<void> {
 
     const order = await executeOrder(bet, market, config.dryRun);
     if (order.status !== "failed") {
-      risk.openPositions += 1;
-      risk.totalExposed += bet.amount;
+      const entryPrice = bet.side === "home" ? market.homePrice : market.awayPrice;
+      tracker.open(order, bet.amount, entryPrice);
+      tracker.saveToFile(positionsFile);
+      appendResult(resultsFile, {
+        timestamp: order.timestamp,
+        gameId: game.gameId,
+        side: bet.side,
+        entryPrice,
+        amount: bet.amount,
+        notes: config.dryRun ? "dry-run" : "",
+      });
     }
   }
+
+  const summary = tracker.getSummary();
+  logger.info("Portfolio: open=" + summary.open + " closed=" + summary.closed + " PnL=" + summary.totalPnL.toFixed(2));
 }
 
 async function run(): Promise<void> {

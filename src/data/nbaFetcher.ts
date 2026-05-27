@@ -40,3 +40,47 @@ export async function fetchLiveGames(apiKey: string): Promise<GameState[]> {
     status: mapStatus(g.status),
   }));
 }
+interface ESPNCompetitor {
+  homeAway: string;
+  team: { displayName: string };
+  score?: string;
+}
+
+interface ESPNEvent {
+  id: string;
+  competitions: Array<{
+    competitors: ESPNCompetitor[];
+    status: { clock: number; displayClock: string; period: number; type: { completed: boolean; state: string } };
+  }>;
+}
+
+export async function fetchLiveGamesESPN(): Promise<GameState[]> {
+  const url = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard";
+  const resp = await axios.get(url, { timeout: 5000 });
+  const events: ESPNEvent[] = resp.data.events ?? [];
+  return events.map((e) => {
+    const comp = e.competitions[0];
+    const home = comp.competitors.find((c) => c.homeAway === "home")!;
+    const away = comp.competitors.find((c) => c.homeAway === "away")!;
+    const st = comp.status;
+    const isCompleted = st.type.completed || st.type.state === "post";
+    const isLive = !isCompleted && st.type.state === "in";
+    const clockParts = (st.displayClock ?? "12:00").split(":");
+    const clockSecs = (parseInt(clockParts[0] ?? "12", 10) * 60) + parseInt(clockParts[1] ?? "0", 10);
+    const period = st.period ?? 1;
+    const periodsLeft = Math.max(0, 4 - period);
+    const secsRemaining = isCompleted ? 0 : periodsLeft * 12 * 60 + clockSecs;
+    return {
+      gameId: e.id,
+      homeTeam: home.team.displayName,
+      awayTeam: away.team.displayName,
+      homeScore: parseInt(home.score ?? "0", 10),
+      awayScore: parseInt(away.score ?? "0", 10),
+      secondsRemaining: secsRemaining,
+      quarter: period,
+      possession: 0,
+      timestamp: new Date().toISOString(),
+      status: isCompleted ? "final" : isLive ? "live" : "scheduled",
+    };
+  });
+}

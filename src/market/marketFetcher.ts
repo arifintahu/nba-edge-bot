@@ -1,5 +1,6 @@
 import axios from "axios";
 import type { MarketPrice } from "../types";
+import { searchNBAMarket } from "./polymarketSearch";
 
 // Mock market prices for dry-run / testing
 const MOCK_MARKETS: Record<string, MarketPrice> = {};
@@ -42,4 +43,17 @@ export async function fetchMarketPrice(gameId: string, apiKey: string): Promise<
   } catch {
     return null;
   }
+}
+export async function fetchMarketPriceByTeams(
+  gameId: string,
+  homeTeam: string,
+  awayTeam: string,
+  apiKey: string
+): Promise<MarketPrice | null> {
+  // First try direct gameId lookup, then fall back to team-name search
+  const direct = await fetchMarketPrice(gameId, apiKey);
+  if (direct && direct.source !== "mock") return direct;
+  const byTeams = await searchNBAMarket(homeTeam, awayTeam, gameId, apiKey);
+  if (byTeams) return byTeams;
+  return direct; // return mock if nothing better
 }
