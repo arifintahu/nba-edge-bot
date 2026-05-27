@@ -4,15 +4,18 @@ import { fetchMarketPriceByTeams } from "./market/marketFetcher";
 import { detectEdge } from "./trading/edgeDetector";
 import { kellySize, checkRiskLimits } from "./trading/riskEngine";
 import { PositionTracker } from "./trading/positionTracker";
+import { SimulateTracker } from "./trading/simulateTracker";
 import { appendResult } from "./trading/resultsLogger";
 import { computeWinProbability } from "./model/winProbability";
 import { logger } from "./logger";
 import { CanonClient } from "./canon/canonClient";
 import type { GameState, RiskState } from "./types";
 
-
 const tracker = new PositionTracker();
+const simTracker = new SimulateTracker(config.startingBankroll);
 const RESULTS_PATH = "RESULTS.md";
+const SIMULATE_PATH = "SIMULATE.md";
+const SIM_POSITIONS_PATH = "sim-positions.json";
 
 const canonClient = new CanonClient({
   cliPath: config.canonCliPath,
@@ -21,6 +24,7 @@ const canonClient = new CanonClient({
 });
 
 const DRY_RUN = process.argv.includes("--dry-run") || config.dryRun;
+const SIMULATE = process.argv.includes("--simulate");
 
 async function processTick(): Promise<void> {
   let games: GameState[] = [];
@@ -30,6 +34,18 @@ async function processTick(): Promise<void> {
     try { games = await fetchLiveGamesESPN(); } catch { return; }
   }
   const liveGames = games.filter(g => g.status === "live");
+  const finalGames = games.filter(g => g.status === "final");
+
+  if (SIMULATE && finalGames.length > 0) {
+    for (const g of finalGames) {
+      const diff = g.homeScore - g.awayScore;
+      const winner = diff > 0 ? "home" : "away";
+      simTracker.resolveGame(g.gameId, winner as "home" | "away");
+    }
+    simTracker.savePositions(SIM_POSITIONS_PATH);
+    simTracker.writeReport(SIMULATE_PATH);
+  }
+
   if (liveGames.length === 0) {
     logger.info("No live games");
     return;
@@ -62,13 +78,32 @@ async function processTick(): Promise<void> {
     const bet = kellySize(edge, market, riskState, config.maxBetFraction, config.maxExposureFraction);
     if (bet.amount <= 0) continue;
 
-    const tag = DRY_RUN ? "[DRY-RUN]" : "[LIVE]";
-    console.log(tag + " EDGE " + game.homeTeam + " vs " + game.awayTeam
+    const entryPrice = edge.side === "home" ? market.homePrice : market.awayPrice;
+    const modeLabel = SIMULATE ? "[SIMULATE]" : DRY_RUN ? "[DRY-RUN]" : "[LIVE]";
+    console.log(modeLabel + " EDGE " + game.homeTeam + " vs " + game.awayTeam
       + " | model=" + wp.homeWinProb.toFixed(3)
       + " market=" + market.homeImpliedProb.toFixed(3)
       + " edge=" + edge.edge.toFixed(3)
       + " stake=$" + bet.amount.toFixed(2)
     );
+
+    if (SIMULATE) {
+      simTracker.open({
+        gameId: game.gameId,
+        marketId: market.marketId,
+        homeTeam: game.homeTeam,
+        awayTeam: game.awayTeam,
+        side: edge.side,
+        entryPrice,
+        stake: bet.amount,
+        modelProb: edge.side === "home" ? wp.homeWinProb : wp.awayWinProb,
+        edge: edge.edge,
+        openedAt: new Date().toISOString(),
+      });
+      simTracker.savePositions(SIM_POSITIONS_PATH);
+      simTracker.writeReport(SIMULATE_PATH);
+      continue;
+    }
 
     const signal = {
       gameId: game.gameId,
@@ -100,11 +135,26 @@ async function processTick(): Promise<void> {
 
   const summary = tracker.getSummary();
   logger.info("Tick done", summary as unknown as Record<string, unknown>);
+
+  if (SIMULATE) {
+    const simSummary = simTracker.getSummary();
+    console.log("[SIMULATE] bankroll=$" + config.startingBankroll.toFixed(2)
+      + " trades=" + simSummary.totalTrades
+      + " open=" + simSummary.openTrades
+      + " pnl=" + (simSummary.totalPnL >= 0 ? "+" : "") + "$" + simSummary.totalPnL.toFixed(2)
+    );
+  }
 }
 
 async function main(): Promise<void> {
-  console.log("NBA Edge Bot starting | dry-run=" + DRY_RUN + " | poll=" + config.pollIntervalSeconds + "s");
-  tracker.loadFromFile("positions.json");
+  const mode = SIMULATE ? "simulate" : DRY_RUN ? "dry-run" : "live";
+  console.log("NBA Edge Bot starting | mode=" + mode + " | poll=" + config.pollIntervalSeconds + "s");
+  if (SIMULATE) {
+    simTracker.loadFromFile(SIM_POSITIONS_PATH);
+    console.log("Simulate mode — trades logged to SIMULATE.md (no real orders placed)");
+  } else {
+    tracker.loadFromFile("positions.json");
+  }
   await processTick();
   setInterval(processTick, config.pollIntervalSeconds * 1000);
 }

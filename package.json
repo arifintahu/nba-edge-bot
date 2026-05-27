@@ -11,7 +11,8 @@
     "test": "jest --forceExit",
     "test:watch": "jest --watch",
     "backtest": "ts-node scripts/backtest.ts",
-    "live": "ts-node src/index.ts"
+    "live": "ts-node src/index.ts",
+    "simulate": "ts-node src/index.ts --simulate"
   },
   "dependencies": {
     "axios": "^1.6.8",
