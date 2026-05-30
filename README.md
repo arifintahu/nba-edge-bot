@@ -6,13 +6,28 @@
 
 Speed-based NBA playoff prediction market bot for the **DEGA NBA Playoffs Hackathon** on DoraHacks.
 
-**Hackathon:** [DEGA NBA Playoffs Prediction Market](https://dorahacks.io) | **Deadline:** June 1, 2026
+**Hackathon:** [DEGA NBA Playoffs Prediction Market](https://dorahacks.io/hackathon/nba-prediction-market/detail) | **Deadline:** June 1, 2026  
+**Demo:** [YouTube](https://youtu.be/rvPqKRYJDIU) | **Submission:** [DoraHacks #44084](https://dorahacks.io/buidl/44084)
+
+---
+
+## Performance (Simulation)
+
+| Metric | Value |
+|--------|-------|
+| Starting bankroll | $100 USDC |
+| Final bankroll | $157.22 |
+| Net P&L | **+57.2%** |
+| Win rate | **79.1%** (182/230 trades) |
+| Stop-loss triggered | No |
+
+See [RESULTS.md](RESULTS.md) for the full breakdown and [SIMULATE.md](SIMULATE.md) for the per-trade log.
+
+---
 
 ## Strategy
 
-After each 30-second poll, compute a win probability from live game state and compare it to
-the Polymarket-implied probability. When the gap exceeds the threshold (default 5%), place a
-Kelly-fractional-sized bet via the Canon CLI.
+After each 30-second poll, the bot computes a win probability from live game state and compares it to the Polymarket-implied probability. When the gap exceeds the threshold (default 5%), it places a Kelly-fractional-sized bet via Canon CLI.
 
 ```
 Win Probability Model:
@@ -22,6 +37,25 @@ Kelly Sizing:
 f* = (P * B - (1 - P)) / B   (B = decimal odds - 1)
 bet = bankroll * f* * 0.25    (quarter-Kelly for safety)
 ```
+
+**The edge:** Polymarket prices lag real-time game state. A model watching every possession detects mispricings seconds before the crowd — and trades them before the window closes.
+
+---
+
+## Canon Integration
+
+CourtEdge uses Canon as its order execution and state management layer:
+
+| What | How |
+|------|-----|
+| **Order submission** | `src/canon/canonClient.ts` — calls `canon order --market ... --side ... --amount ... --key ...` via Canon CLI gateway |
+| **State reporting** | `src/canon/canonStateWriter.ts` — writes `.canon/state.json` (bankroll, P&L, positions) after every tick |
+| **Execution log** | `.canon/execution/<run_id>.jsonl` — structured JSONL per run, queryable by Canon's monitoring stack |
+| **Event stream** | `.canon/flow.json` — append-only event log (init, trade, tick, halt) |
+
+Canon CLI availability is checked at startup. If not available or `DRY_RUN=true`, all orders are simulated locally — no funds at risk.
+
+---
 
 ## Architecture
 
@@ -36,10 +70,12 @@ Risk Engine (Kelly sizing + stop-loss guard)
         |
 Canon Client -> Polymarket (or dry-run)
         |
-RESULTS.md + logs/trades.jsonl
+RESULTS.md + logs/trades.jsonl + .canon/
 ```
 
 See [docs/architecture.md](docs/architecture.md) for the full module map.
+
+---
 
 ## Quick Start
 
@@ -62,6 +98,8 @@ npm run live
 
 See [docs/setup.md](docs/setup.md) for wallet setup and Canon CLI installation.
 
+---
+
 ## Configuration
 
 | Variable | Default | Description |
@@ -80,14 +118,17 @@ See [docs/setup.md](docs/setup.md) for wallet setup and Canon CLI installation.
 | WALLET_PRIVATE_KEY | | Wallet key for order signing |
 | MARKET_TYPE | mock | polymarket / mock |
 
-## Example Log Output
+---
+
+## Example Output
 
 ```
 {"level":"trade","timestamp":"2026-05-30T02:14:33.121Z","message":"Order","data":{"gameId":"1","marketId":"0xabc","side":"home","amount":2.47,"price":0.61,"orderId":"dry-1717027473121","status":"dry-run"}}
-{"level":"info","timestamp":"2026-05-30T02:14:33.150Z","message":"Tick done","data":{"openPositions":1,"totalExposed":2.47}}
 [02:14:33] TRADE Order
 [DRY-RUN] EDGE OKC vs MIN | model=0.671 market=0.610 edge=0.061 stake=$2.47
 ```
+
+---
 
 ## Tests
 
@@ -96,9 +137,7 @@ npm test
 # 25 tests across win-prob model, edge detector, risk engine, backtest runner, position tracker
 ```
 
-## Results
-
-See [RESULTS.md](RESULTS.md) for live trade log.
+---
 
 ## License
 
