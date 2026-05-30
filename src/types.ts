@@ -1,4 +1,4 @@
-// Shared TypeScript types for nba-edge-bot
+// Shared TypeScript types for court-edge
 
 export interface GameState {
   gameId: string;
